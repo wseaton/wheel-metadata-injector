@@ -1,6 +1,8 @@
 # Wheel Metadata Injector
 
-A tool that injects build environment variables into Python wheel packages according to [PEP 658](https://peps.python.org/pep-0658/).
+A tool that injects build metadata into Python wheel packages according to [PEP 658](https://peps.python.org/pep-0658/).
+
+This allows metadata that the builder would like to get included from the build to be inspected in the final wheel without downloading and installing the entire wheel. A good example and motivation for this is `TORCH_CUDA_ARCH_LIST`, which controls how code is compiled for packages that link to torch. This makes it much easier post-facto to figure out what a wheel was built against, and can potentially serve as inputs for advanced resolvers.
 
 ## Installation
 
@@ -18,21 +20,66 @@ wheel-metadata-injector path/to/your-package-1.0.0-py3-none-any.whl
 
 # Process a wheel file and save to a new location
 wheel-metadata-injector path/to/your-package-1.0.0-py3-none-any.whl -o path/to/output.whl
+
+# Process a wheel file using environment variables from a file
+wheel-metadata-injector path/to/your-package-1.0.0-py3-none-any.whl -e path/to/env_vars.txt
+
+# Process a wheel file using inline list of environment variables
+wheel-metadata-injector path/to/your-package-1.0.0-py3-none-any.whl -v "PATH,PYTHONPATH,CUDA_VERSION"
+```
+
+### Environment Variables Configuration
+
+By default, the tool captures a predefined list of environment variables (see [Whitelisted Environment Variables](#whitelisted-environment-variables) section).
+
+Alternatively, you can provide a file containing a custom list of environment variable names to collect. Example file content:
+
+```
+# This is a comment
+TORCH_CUDA_ARCH_LIST
+CUDA_VERSION
+BUILD_TYPE
+PATH
+PYTHONPATH
+# Each line should contain just one variable name
 ```
 
 ### Python API
 
 ```python
-from wheel_metadata_injector import process_wheel, get_whitelisted_env_vars
+from wheel_metadata_injector import (
+    process_wheel, 
+    process_wheel_with_env_file, 
+    get_whitelisted_env_vars,
+    get_whitelisted_env_vars_with_file
+)
 
-# Get current environment variables that will be injected
+# Get environment variables using default whitelist
 env_vars = get_whitelisted_env_vars()
 print(f"Will inject {len(env_vars)} environment variables")
 
-# Process a wheel file
+# Get environment variables using custom list from file
+env_vars = get_whitelisted_env_vars_with_file("path/to/env_vars.txt")
+print(f"Will inject {len(env_vars)} environment variables from custom list")
+
+# Process a wheel file using system environment variables
 output_path = process_wheel("path/to/your-package-1.0.0-py3-none-any.whl")
 # or specify output path
 output_path = process_wheel("path/to/your-package-1.0.0-py3-none-any.whl", "path/to/output.whl")
+
+# Process a wheel file using custom environment variable list from file
+output_path = process_wheel_with_env_file(
+    "path/to/your-package-1.0.0-py3-none-any.whl", 
+    "path/to/env_vars.txt",
+    "path/to/output.whl"  # output path is optional
+)
+
+# Process a wheel file using inline list of environment variables
+output_path = process_wheel_with_env_vars(
+    "path/to/your-package-1.0.0-py3-none-any.whl", 
+    "PATH,PYTHONPATH,CUDA_VERSION",
+    "path/to/output.whl"  # output path is optional
+)
 ```
 
 ### Setuptools Plugin
@@ -82,6 +129,18 @@ You can skip the metadata injection by passing the `--skip-metadata-injection` f
 
 ```bash
 python setup.py bdist_wheel --skip-metadata-injection
+```
+
+To use environment variables from a file:
+
+```bash
+python setup.py bdist_wheel --env-file path/to/env_vars.txt
+```
+
+To specify environment variables inline:
+
+```bash
+python setup.py bdist_wheel --env-vars "PATH,PYTHONPATH,CUDA_VERSION"
 ```
 
 See the [examples directory](./examples) for more detailed usage.

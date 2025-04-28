@@ -15,9 +15,10 @@ mod core {
 }
 
 // Re-export from main.rs
+use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
-use std::io::{self as io_std, Read, Write};
+use std::io::{self as io_std, BufRead, BufReader, Read, Write};
 use std::path::{Path as PathStd, PathBuf};
 
 use hex::encode;
@@ -48,11 +49,32 @@ pub struct WheelInfo {
     pub metadata_path: String,
 }
 
+#[pyfunction]
+fn get_env_vars_from_comma_list(comma_list: String) -> PyResult<Vec<(String, String)>> {
+    Ok(collect_env_vars_from_comma_list(&comma_list))
+}
+
+#[pyfunction]
+fn process_wheel_with_env_vars(wheel_path: String, env_vars: String, output_path: Option<String>) -> PyResult<String> {
+    let output_path = output_path.unwrap_or_else(|| wheel_path.clone());
+    
+    let env_vars = collect_env_vars_from_comma_list(&env_vars);
+    
+    match internal_process_wheel(&wheel_path, &output_path, &env_vars) {
+        Ok(_) => Ok(output_path),
+        Err(e) => Err(PyValueError::new_err(format!("Error processing wheel: {}", e))),
+    }
+}
+
 #[pymodule]
 fn _wheel_metadata_injector(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<WheelInfo>()?;
     m.add_function(wrap_pyfunction!(process_wheel, m)?)?;
+    m.add_function(wrap_pyfunction!(process_wheel_with_env_file, m)?)?;
+    m.add_function(wrap_pyfunction!(process_wheel_with_env_vars, m)?)?;
     m.add_function(wrap_pyfunction!(get_whitelisted_env_vars, m)?)?;
+    m.add_function(wrap_pyfunction!(get_whitelisted_env_vars_with_file, m)?)?;
+    m.add_function(wrap_pyfunction!(get_env_vars_from_comma_list, m)?)?;
     Ok(())
 }
 
@@ -69,8 +91,25 @@ fn process_wheel(wheel_path: String, output_path: Option<String>) -> PyResult<St
 }
 
 #[pyfunction]
+fn process_wheel_with_env_file(wheel_path: String, env_file: String, output_path: Option<String>) -> PyResult<String> {
+    let output_path = output_path.unwrap_or_else(|| wheel_path.clone());
+    
+    let env_vars = collect_whitelisted_env_vars_with_file(Some(&env_file));
+    
+    match internal_process_wheel(&wheel_path, &output_path, &env_vars) {
+        Ok(_) => Ok(output_path),
+        Err(e) => Err(PyValueError::new_err(format!("Error processing wheel: {}", e))),
+    }
+}
+
+#[pyfunction]
 fn get_whitelisted_env_vars() -> PyResult<Vec<(String, String)>> {
     Ok(collect_whitelisted_env_vars())
+}
+
+#[pyfunction]
+fn get_whitelisted_env_vars_with_file(env_file: String) -> PyResult<Vec<(String, String)>> {
+    Ok(collect_whitelisted_env_vars_with_file(Some(&env_file)))
 }
 
 fn internal_process_wheel(wheel_path: &str, output_path: &str, env_vars: &[(String, String)]) -> io::Result<()> {
@@ -88,12 +127,59 @@ fn internal_process_wheel(wheel_path: &str, output_path: &str, env_vars: &[(Stri
     Ok(())
 }
 
-pub fn collect_whitelisted_env_vars() -> Vec<(String, String)> {
-    let mut env_vars = Vec::new();
+pub fn read_vars_list_from_file(file_path: &str) -> io::Result<Vec<String>> {
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let mut var_names = Vec::new();
 
-    for &var_name in ENV_WHITELIST {
-        if let Ok(value) = env::var(var_name) {
-            env_vars.push((var_name.to_string(), value));
+    for line in reader.lines() {
+        let line = line?;
+        let trimmed = line.trim();
+        // Skip empty lines and comments
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        var_names.push(trimmed.to_string());
+    }
+
+    Ok(var_names)
+}
+
+pub fn collect_whitelisted_env_vars() -> Vec<(String, String)> {
+    collect_env_vars_from_list(ENV_WHITELIST.iter().map(|&s| s.to_string()).collect())
+}
+
+pub fn collect_whitelisted_env_vars_with_file(vars_file: Option<&str>) -> Vec<(String, String)> {
+    match vars_file {
+        Some(file_path) => {
+            match read_vars_list_from_file(file_path) {
+                Ok(var_list) => collect_env_vars_from_list(var_list),
+                Err(_) => {
+                    // Fall back to default whitelist on file error
+                    collect_whitelisted_env_vars()
+                }
+            }
+        },
+        None => collect_whitelisted_env_vars()
+    }
+}
+
+pub fn collect_env_vars_from_comma_list(comma_list: &str) -> Vec<(String, String)> {
+    let var_names: Vec<String> = comma_list
+        .split(',')
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect();
+    
+    collect_env_vars_from_list(var_names)
+}
+
+fn collect_env_vars_from_list(var_names: Vec<String>) -> Vec<(String, String)> {
+    let mut env_vars = Vec::new();
+    
+    for var_name in var_names {
+        if let Ok(value) = env::var(&var_name) {
+            env_vars.push((var_name, value));
         }
     }
 

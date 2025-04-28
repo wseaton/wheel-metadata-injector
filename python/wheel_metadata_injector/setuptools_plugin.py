@@ -1,7 +1,7 @@
 import os
 from setuptools.command.bdist_wheel import bdist_wheel
 
-from . import process_wheel, get_whitelisted_env_vars
+from . import process_wheel, process_wheel_with_env_file, get_whitelisted_env_vars, get_whitelisted_env_vars_with_file
 
 class InjectMetadataBdistWheel(bdist_wheel):
     """A setuptools command for building wheels with injected environment metadata.
@@ -12,6 +12,8 @@ class InjectMetadataBdistWheel(bdist_wheel):
     
     user_options = bdist_wheel.user_options + [
         ('skip-metadata-injection', None, 'Skip environment metadata injection'),
+        ('env-file=', 'e', 'Path to file containing list of environment variables to collect'),
+        ('env-vars=', None, 'Comma-separated list of environment variables to collect'),
     ]
     
     boolean_options = bdist_wheel.boolean_options + ['skip-metadata-injection']
@@ -19,6 +21,8 @@ class InjectMetadataBdistWheel(bdist_wheel):
     def initialize_options(self):
         super().initialize_options()
         self.skip_metadata_injection = False
+        self.env_file = None
+        self.env_vars = None
     
     def finalize_options(self):
         super().finalize_options()
@@ -47,16 +51,56 @@ class InjectMetadataBdistWheel(bdist_wheel):
         
         print(f"Injecting environment metadata into {wheel_path}")
         
-        env_vars = get_whitelisted_env_vars()
-        if not env_vars:
-            print("Warning: No whitelisted environment variables found for injection")
-        else:
-            print(f"Found {len(env_vars)} whitelisted environment variables to inject")
+        # Create a temporary file for inline env vars if needed
+        temp_env_file = None
         
         try:
-            # Inject metadata in-place
-            process_wheel(wheel_path)
-            print(f"Successfully injected environment metadata into {wheel_path}")
-        except Exception as e:
-            print(f"Error injecting environment metadata: {e}")
-            raise
+            if self.env_vars:
+                # Parse comma-separated list
+                print(f"Using inline environment variable list: {self.env_vars}")
+                import tempfile
+                
+                # Create a temporary file
+                fd, temp_path = tempfile.mkstemp(prefix="wheel_metadata_", suffix=".txt")
+                temp_env_file = temp_path
+                
+                with os.fdopen(fd, 'w') as f:
+                    for var in self.env_vars.split(','):
+                        var = var.strip()
+                        if var:  # Skip empty entries
+                            f.write(f"{var}\n")
+                
+                env_vars = get_whitelisted_env_vars_with_file(temp_path)
+            elif self.env_file:
+                print(f"Reading environment variable names from file: {self.env_file}")
+                env_vars = get_whitelisted_env_vars_with_file(self.env_file)
+            else:
+                print("Using default whitelisted environment variables")
+                env_vars = get_whitelisted_env_vars()
+                
+            if not env_vars:
+                print("Warning: No environment variables found to inject")
+            else:
+                print(f"Found {len(env_vars)} environment variables to inject")
+                for name, _ in env_vars:
+                    print(f"  {name}")
+            
+            # Inject metadata
+            try:
+                if self.env_vars and temp_env_file:
+                    process_wheel_with_env_file(wheel_path, temp_env_file)
+                elif self.env_file:
+                    process_wheel_with_env_file(wheel_path, self.env_file)
+                else:
+                    process_wheel(wheel_path)
+                print(f"Successfully injected environment metadata into {wheel_path}")
+            except Exception as e:
+                print(f"Error injecting environment metadata: {e}")
+                raise
+        finally:
+            # Clean up temporary file if created
+            if temp_env_file and os.path.exists(temp_env_file):
+                try:
+                    os.unlink(temp_env_file)
+                except Exception as e:
+                    print(f"Warning: Failed to remove temporary file {temp_env_file}: {e}")
