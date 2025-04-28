@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.5,<1.6"]
+build-backend = "maturin"
+
+[project]
+name = "wheel-metadata-injector"
+requires-python = ">=3.8"
+dependencies = [
+    "setuptools>=42.0.0",
+    "wheel>=0.37.0",
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: Setuptools Plugin",
+]
+dynamic = ["version"]
+
+[project.scripts]
+wheel-metadata-injector = "wheel_metadata_injector.cli:main"
+
+[project.entry-points."setuptools.cmdclass"]
+bdist_wheel = "wheel_metadata_injector:InjectMetadataBdistWheel"
+
+[tool.maturin]
+features = []
+python-source = "python"
+module-name = "wheel_metadata_injector._wheel_metadata_injector"
