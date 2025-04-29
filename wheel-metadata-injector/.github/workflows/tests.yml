@@ -23,14 +23,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
+    - name: Set up uv
+      uses: astral-sh/setup-uv-action@v1
+    
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install maturin
-        pip install pytest pytest-cov
+        uv pip install maturin pytest pytest-cov
     
     - name: Install just
       uses: taiki-e/install-action@v2
