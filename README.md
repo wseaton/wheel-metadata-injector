@@ -177,3 +177,47 @@ maturin develop
 # Build a wheel
 maturin build --release
 ```
+
+### Running Tests
+
+The project uses pytest for testing and [just](https://github.com/casey/just) as a command runner. 
+
+First, install just and the test dependencies:
+
+```bash
+# Install just (on macOS)
+brew install just
+
+# On other platforms, see: https://github.com/casey/just#installation
+
+# Install test dependencies
+pip install pytest pytest-cov
+```
+
+To run the tests using just:
+
+```bash
+# Run all tests
+just test
+
+# Run tests with coverage report
+just coverage
+
+# Run only end-to-end tests
+just test-e2e
+
+# See all available commands
+just
+```
+
+You can also run pytest directly:
+
+```bash
+# Build the package first
+maturin develop
+
+# Run all tests
+pytest
+```
+
+See the [tests directory](./tests) for more details on testing.

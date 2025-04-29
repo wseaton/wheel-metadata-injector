@@ -1,25 +1,13 @@
-use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
-use std::path::Path;
+use pyo3::prelude::*;
 use std::io;
+use std::path::Path;
 
-mod core {
-    pub use super::collect_whitelisted_env_vars;
-    pub use super::unpack_wheel;
-    pub use super::create_build_env_file;
-    pub use super::update_record_file;
-    pub use super::repack_wheel;
-    pub use super::WheelInfo;
-    pub use super::ENV_WHITELIST;
-    pub use super::BUILD_ENV_FILENAME;
-}
-
-// Re-export from main.rs
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
 use std::io::{self as io_std, BufRead, BufReader, Read, Write};
-use std::path::{Path as PathStd, PathBuf};
+use std::path::PathBuf;
 
 use hex::encode;
 use sha2::{Digest, Sha256};
@@ -39,7 +27,7 @@ pub const ENV_WHITELIST: &[&str] = &[
 ];
 
 // PEP 658 specifics - filename for build environment metadata
-pub const BUILD_ENV_FILENAME: &str = "BUILD_ENVIRONMENT.txt";
+pub const BUILD_ENV_FILENAME: &str = "WHEEL.metadata";
 
 #[pyclass]
 pub struct WheelInfo {
@@ -55,14 +43,21 @@ fn get_env_vars_from_comma_list(comma_list: String) -> PyResult<Vec<(String, Str
 }
 
 #[pyfunction]
-fn process_wheel_with_env_vars(wheel_path: String, env_vars: String, output_path: Option<String>) -> PyResult<String> {
+fn process_wheel_with_env_vars(
+    wheel_path: String,
+    env_vars: String,
+    output_path: Option<String>,
+) -> PyResult<String> {
     let output_path = output_path.unwrap_or_else(|| wheel_path.clone());
-    
+
     let env_vars = collect_env_vars_from_comma_list(&env_vars);
-    
+
     match internal_process_wheel(&wheel_path, &output_path, &env_vars) {
         Ok(_) => Ok(output_path),
-        Err(e) => Err(PyValueError::new_err(format!("Error processing wheel: {}", e))),
+        Err(e) => Err(PyValueError::new_err(format!(
+            "Error processing wheel: {}",
+            e
+        ))),
     }
 }
 
@@ -81,24 +76,34 @@ fn _wheel_metadata_injector(_py: Python, m: &PyModule) -> PyResult<()> {
 #[pyfunction]
 fn process_wheel(wheel_path: String, output_path: Option<String>) -> PyResult<String> {
     let output_path = output_path.unwrap_or_else(|| wheel_path.clone());
-    
+
     let env_vars = collect_whitelisted_env_vars();
-    
+
     match internal_process_wheel(&wheel_path, &output_path, &env_vars) {
         Ok(_) => Ok(output_path),
-        Err(e) => Err(PyValueError::new_err(format!("Error processing wheel: {}", e))),
+        Err(e) => Err(PyValueError::new_err(format!(
+            "Error processing wheel: {}",
+            e
+        ))),
     }
 }
 
 #[pyfunction]
-fn process_wheel_with_env_file(wheel_path: String, env_file: String, output_path: Option<String>) -> PyResult<String> {
+fn process_wheel_with_env_file(
+    wheel_path: String,
+    env_file: String,
+    output_path: Option<String>,
+) -> PyResult<String> {
     let output_path = output_path.unwrap_or_else(|| wheel_path.clone());
-    
+
     let env_vars = collect_whitelisted_env_vars_with_file(Some(&env_file));
-    
+
     match internal_process_wheel(&wheel_path, &output_path, &env_vars) {
         Ok(_) => Ok(output_path),
-        Err(e) => Err(PyValueError::new_err(format!("Error processing wheel: {}", e))),
+        Err(e) => Err(PyValueError::new_err(format!(
+            "Error processing wheel: {}",
+            e
+        ))),
     }
 }
 
@@ -112,7 +117,11 @@ fn get_whitelisted_env_vars_with_file(env_file: String) -> PyResult<Vec<(String,
     Ok(collect_whitelisted_env_vars_with_file(Some(&env_file)))
 }
 
-fn internal_process_wheel(wheel_path: &str, output_path: &str, env_vars: &[(String, String)]) -> io::Result<()> {
+fn internal_process_wheel(
+    wheel_path: &str,
+    output_path: &str,
+    env_vars: &[(String, String)],
+) -> io::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let temp_dir_path = temp_dir.path();
 
@@ -159,8 +168,8 @@ pub fn collect_whitelisted_env_vars_with_file(vars_file: Option<&str>) -> Vec<(S
                     collect_whitelisted_env_vars()
                 }
             }
-        },
-        None => collect_whitelisted_env_vars()
+        }
+        None => collect_whitelisted_env_vars(),
     }
 }
 
@@ -170,13 +179,13 @@ pub fn collect_env_vars_from_comma_list(comma_list: &str) -> Vec<(String, String
         .map(|name| name.trim().to_string())
         .filter(|name| !name.is_empty())
         .collect();
-    
+
     collect_env_vars_from_list(var_names)
 }
 
 fn collect_env_vars_from_list(var_names: Vec<String>) -> Vec<(String, String)> {
     let mut env_vars = Vec::new();
-    
+
     for var_name in var_names {
         if let Ok(value) = env::var(&var_name) {
             env_vars.push((var_name, value));
@@ -241,7 +250,10 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
     })
 }
 
-pub fn create_build_env_file(build_env_path: &Path, env_vars: &[(String, String)]) -> io::Result<()> {
+pub fn create_build_env_file(
+    build_env_path: &Path,
+    env_vars: &[(String, String)],
+) -> io::Result<()> {
     let mut content = String::new();
 
     content.push_str("# Build environment variables captured during wheel creation\n");
@@ -299,9 +311,9 @@ pub fn repack_wheel(temp_dir: &Path, output_path: &str) -> io::Result<()> {
     let output_file = File::create(output_path)?;
     let mut zip = ZipWriter::new(output_file);
 
-    let options: FileOptions<'_, ()> = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-    
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
     let mut paths: Vec<PathBuf> = Vec::new();
     collect_files(temp_dir, &mut paths)?;
 

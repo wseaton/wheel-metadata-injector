@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.5,<1.6"]
+requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
@@ -25,9 +25,22 @@ dynamic = ["version"]
 wheel-metadata-injector = "wheel_metadata_injector.cli:main"
 
 [project.entry-points."setuptools.cmdclass"]
-bdist_wheel = "wheel_metadata_injector:InjectMetadataBdistWheel"
+bdist_wheel = "wheel_metadata_injector.setuptools_plugin:InjectMetadataBdistWheel"
 
 [tool.maturin]
 features = []
 python-source = "python"
 module-name = "wheel_metadata_injector._wheel_metadata_injector"
+
+[dependency-groups]
+dev = [
+    "pip>=25.0.1",
+    "pytest>=8.3.5",
+    "pytest-cov>=5.0.0",
+    "wheel>=0.45.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--cov=wheel_metadata_injector"

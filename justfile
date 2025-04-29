@@ -1,0 +1,36 @@
+# shellcheck disable=SC2148
+
+default:
+    @just --list
+
+build:
+    maturin develop
+
+test: build
+    uv run pytest -v tests/
+
+coverage: build
+    uv run pytest --cov=wheel_metadata_injector --cov-report=term
+
+coverage-html: build
+    uv run pytest --cov=wheel_metadata_injector --cov-report=html
+
+test-e2e: build
+    uv run pytest tests/e2e/
+
+clean:
+    rm -rf target/
+    rm -rf dist/
+    rm -rf .pytest_cache/
+    rm -rf htmlcov/
+    rm -rf .coverage
+    find . -name "__pycache__" -type d -exec rm -rf {} +
+
+release:
+    maturin build --release
+
+example-wheel:
+    cd examples && python setup.py bdist_wheel --skip-metadata-injection
+
+run-example: example-wheel
+    wheel-metadata-injector examples/dist/*.whl -o examples/dist/processed.whl
