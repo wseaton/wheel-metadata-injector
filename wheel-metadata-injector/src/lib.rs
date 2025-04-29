@@ -3,10 +3,9 @@ use pyo3::prelude::*;
 use std::io;
 use std::path::Path;
 
-use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
-use std::io::{self as io_std, BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 
 use hex::encode;
@@ -62,7 +61,7 @@ fn process_wheel_with_env_vars(
 }
 
 #[pymodule]
-fn _wheel_metadata_injector(_py: Python, m: &PyModule) -> PyResult<()> {
+fn _wheel_metadata_injector<'py>(_py: Python, m: &Bound<'py, PyModule>) -> PyResult<()> {
     m.add_class::<WheelInfo>()?;
     m.add_function(wrap_pyfunction!(process_wheel, m)?)?;
     m.add_function(wrap_pyfunction!(process_wheel_with_env_file, m)?)?;

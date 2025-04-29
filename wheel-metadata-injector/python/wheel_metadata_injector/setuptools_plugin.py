@@ -95,9 +95,9 @@ class InjectMetadataBdistWheel(bdist_wheel):
 
             try:
                 if self.env_vars and temp_env_file:
-                    process_wheel_with_env_file(wheel_path, temp_env_file)
+                    process_wheel_with_env_file(wheel_path, temp_env_file, None)
                 elif self.env_file:
-                    process_wheel_with_env_file(wheel_path, self.env_file)
+                    process_wheel_with_env_file(wheel_path, self.env_file, None)
                 else:
                     process_wheel(wheel_path)
                 print(f"Successfully injected environment metadata into {wheel_path}")
