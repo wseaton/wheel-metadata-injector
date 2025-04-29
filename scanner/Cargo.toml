@@ -1,0 +1,35 @@
+[package]
+name = "scanner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+clap = { version = "4.5", features = ["derive"] }
+
+
+tokio = { version = "1", features = ["full"] }
+
+
+anyhow = "1.0"
+
+
+google-cloud-storage = "0.24"
+google-cloud-auth = "0.19"
+
+
+zip = "0.6"
+
+
+dotenv = "0.15"
+
+
+futures = "0.3"
+bytes = "1.5"
+async-trait = "0.1"
+
+[dev-dependencies]
+
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"

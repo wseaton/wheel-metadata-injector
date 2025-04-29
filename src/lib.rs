@@ -26,7 +26,7 @@ pub const ENV_WHITELIST: &[&str] = &[
     "EXTRA_CAFFE2_CMAKE_FLAGS",
 ];
 
-// PEP 658 specifics - filename for build environment metadata
+
 pub const BUILD_ENV_FILENAME: &str = "WHEEL.metadata";
 
 #[pyclass]
@@ -144,7 +144,7 @@ pub fn read_vars_list_from_file(file_path: &str) -> io::Result<Vec<String>> {
     for line in reader.lines() {
         let line = line?;
         let trimmed = line.trim();
-        // Skip empty lines and comments
+        
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
@@ -164,7 +164,7 @@ pub fn collect_whitelisted_env_vars_with_file(vars_file: Option<&str>) -> Vec<(S
             match read_vars_list_from_file(file_path) {
                 Ok(var_list) => collect_env_vars_from_list(var_list),
                 Err(_) => {
-                    // Fall back to default whitelist on file error
+                    
                     collect_whitelisted_env_vars()
                 }
             }
@@ -201,7 +201,7 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
 
     let mut dist_info_dir = None;
 
-    // First pass: find the dist-info directory name
+    
     for i in 0..archive.len() {
         let file = archive.by_index(i)?;
         let file_path = file.name();

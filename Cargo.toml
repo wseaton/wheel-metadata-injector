@@ -1,5 +1,7 @@
 [workspace]
 
-members = [
+members = [ "scanner",
     "wheel-metadata-injector"
 ]
+
+resolver = "3"

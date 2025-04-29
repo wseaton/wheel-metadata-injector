@@ -15,3 +15,7 @@ venv/
 
 uv.lock
 .coverage
+
+
+.pytest_cache/
+.ruff_cache/
