@@ -29,13 +29,13 @@ jobs:
     - name: Install built wheel
       if: matrix.target == 'x86_64'
       run: |
-        pip install wheel-metadata-injector --no-index --find-links wheel-metadata-injector/dist --force-reinstall
+        pip install wheel-metadata-injector --no-index --find-links dist --force-reinstall
         python -c "import wheel_metadata_injector"
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
         name: wheels
-        path: wheel-metadata-injector/dist
+        path: dist
 
   release:
     name: Release
