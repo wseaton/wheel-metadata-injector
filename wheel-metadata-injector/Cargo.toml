@@ -13,4 +13,4 @@ hex = "0.4.3"
 sha2 = "0.10.8"
 tempfile = "3.19.1"
 zip = "2.6.1"
-pyo3 = { version = "0.24.2", features = ["extension-module"] }
+pyo3 = { version = "0.24.2", features = ["extension-module", "abi3"] }
