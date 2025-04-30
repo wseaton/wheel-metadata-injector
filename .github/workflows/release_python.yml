@@ -5,46 +5,10 @@ on:
   pull_request:
 
 jobs:
-  macos:
-    defaults:
-        run:
-          working-directory: wheel-metadata-injector
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-          architecture: x64
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build wheels - x86_64
-        uses: PyO3/maturin-action@v1
-        with:
-          target: x86_64
-          args: --release --out dist --sdist -m Cargo.toml
-      - name: Install built wheel - x86_64
-        run: |
-          pip install wheel-metadata-injector --no-index --find-links dist --force-reinstall
-          python -c "import wheel_metadata_injector"
-      - name: Build wheels - universal2
-        uses: PyO3/maturin-action@v1
-        with:
-          target: universal2-apple-darwin
-          args: --release --out dist -m Cargo.toml
-      - name: Install built wheel - universal2
-        run: |
-          pip install wheel-metadata-injector --no-index --find-links dist --force-reinstall
-          python -c "import wheel_metadata_injector"
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels
-          path: dist
-
   linux:
     defaults:
-        run:
-          working-directory: wheel-metadata-injector
+      run:
+        working-directory: wheel-metadata-injector
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -64,19 +28,19 @@ jobs:
     - name: Install built wheel
       if: matrix.target == 'x86_64'
       run: |
-        pip install wheel-metadata-injector --no-index --find-links dist --force-reinstall
+        pip install wheel-metadata-injector --no-index --find-links wheel-metadata-injector/dist --force-reinstall
         python -c "import wheel_metadata_injector"
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
         name: wheels
-        path: dist
+        path: wheel-metadata-injector/dist
 
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [ macos, linux ]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [ linux ]
     steps:
       - uses: actions/download-artifact@v4
         with:
