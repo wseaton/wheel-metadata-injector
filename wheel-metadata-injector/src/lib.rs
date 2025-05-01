@@ -14,6 +14,7 @@ use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
 
 pub const ENV_WHITELIST: &[&str] = &[
+    // PyTorch/CUDA build info
     "TORCH_CUDA_ARCH_LIST",
     "CUDA_VERSION",
     "CUDA_HOME",
@@ -23,6 +24,23 @@ pub const ENV_WHITELIST: &[&str] = &[
     "PYTORCH_BUILD_NUMBER",
     "CMAKE_ARGS",
     "EXTRA_CAFFE2_CMAKE_FLAGS",
+    // GitHub Actions CI variables
+    "GITHUB_SHA",
+    "GITHUB_REPOSITORY",
+    "GITHUB_WORKFLOW",
+    "GITHUB_JOB",
+    "GITHUB_RUN_ID",
+    "RUNNER_OS",
+    "RUNNER_ARCH",
+    // Build system info
+    "PYTHON_VERSION",
+    "SETUPTOOLS_VERSION",
+    "PIP_VERSION",
+    "CC", 
+    "CXX",
+    "CFLAGS",
+    "CXXFLAGS",
+    "LDFLAGS",
 ];
 
 // PEP 658 specifics - filename for build environment metadata
