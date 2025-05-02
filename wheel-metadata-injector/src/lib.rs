@@ -195,7 +195,12 @@ pub fn get_repository_info() -> Option<RepositoryInfo> {
     // Get git information from the current directory using libgit2
     let repo = match git2::Repository::discover(".") {
         Ok(repo) => repo,
-        Err(_) => return None,
+        Err(_) => {
+            println!(
+                "WARNING: wheel-metadata-injector could not find git repo, is this an isolated build?"
+            );
+            return None;
+        }
     };
 
     let remotes = match repo.remotes() {
