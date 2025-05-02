@@ -161,17 +161,28 @@ pub fn internal_process_wheel(
 }
 
 pub fn get_pipeline_info() -> Option<AutomationInfo> {
-    // Get pipeline information from environment variables common in CI/CD systems
-    // For example, GitHub Actions and GitLab CI/CD
-    let run_id = env::var("GITHUB_RUN_ID")
-        .ok()
-        .or_else(|| env::var("GITLAB_CI_PIPELINE_ID").ok())
-        .or_else(|| env::var("CI_PIPELINE_ID").ok());
-    if let Some(run_id) = run_id {
+    
+    // Check if running in GitHub Actions
+    if env::var("GITHUB_ACTIONS").is_ok() {
+        let run_id = env::var("GITHUB_RUN_ID").ok();
+        let workflow_name = env::var("GITHUB_WORKFLOW").ok();
+        let workflow_sha = env::var("GITHUB_WORKFLOW_SHA").ok();
+        let job_name = env::var("GITHUB_JOB").ok();
+        let runner_name = env::var("RUNNER_NAME").ok();
+
         return Some(AutomationInfo {
-            run_id: Some(run_id),
+            actions_info: Some(ActionsInfo {
+                run_id,
+                workflow_name,
+                workflow_sha,
+                job_name,
+                runner_name,
+            }),
         });
     }
+
+
+
 
     None
 }
@@ -348,9 +359,29 @@ pub struct RepositoryInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AutomationInfo {
-    /// The continuous integration job identifier (e.g., GitHub Actions job name)
-    /// used to produce the wheel.
+    /// Information specific to github actions.
+    #[serde(flatten)]
+    actions_info: Option<ActionsInfo>,
+
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActionsInfo {
+    /// The GitHub Actions run ID.
+    #[serde(rename = "run_id")]
     run_id: Option<String>,
+    /// The GitHub Actions workflow name.
+    #[serde(rename = "workflow_name")]
+    workflow_name: Option<String>,
+    /// The GitHub Actions workflow SHA.
+    #[serde(rename = "workflow_sha")]
+    workflow_sha: Option<String>,
+    /// The GitHub Actions job name.
+    #[serde(rename = "job_name")]
+    job_name: Option<String>,
+    /// Runner name.
+    #[serde(rename = "runner_name")]
+    runner_name: Option<String>,
 }
 
 pub fn create_build_env_file(

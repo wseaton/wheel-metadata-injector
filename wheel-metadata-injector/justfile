@@ -34,4 +34,4 @@ example-wheel:
 
 run-example: example-wheel
     rm examples/dist/processed.whl || true
-    CUDA_HOME=/foo wheel-metadata-injector examples/dist/*.whl -o examples/dist/processed.whl
+    CUDA_HOME=/foo GITHUB_ACTIONS=true GITHUB_WORKFLOW=bar wheel-metadata-injector examples/dist/*.whl -o examples/dist/processed.whl
