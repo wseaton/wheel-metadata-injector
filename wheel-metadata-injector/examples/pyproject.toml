@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools", "wheel-metadata-injector"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "example-package"
+version = "0.1.0"
+description = "Example package leveraging wheel-metadata-injector"
+requires-python = ">=3.8"
