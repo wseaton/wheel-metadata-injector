@@ -27,6 +27,9 @@ pub const ENV_WHITELIST: &[&str] = &[
     "PYTORCH_BUILD_NUMBER",
     "CMAKE_ARGS",
     "EXTRA_CAFFE2_CMAKE_FLAGS",
+    // ROCm build info
+    "PYTORCH_ROCM_ARCH",
+    "GPU_ARCHS",
     // GitHub Actions CI variables
     "GITHUB_SHA",
     "GITHUB_REPOSITORY",
@@ -36,6 +39,7 @@ pub const ENV_WHITELIST: &[&str] = &[
     "RUNNER_OS",
     "RUNNER_ARCH",
     // Build system info
+    "CMAKE_BUILD_TYPE",
     "PYTHON_VERSION",
     "SETUPTOOLS_VERSION",
     "PIP_VERSION",
