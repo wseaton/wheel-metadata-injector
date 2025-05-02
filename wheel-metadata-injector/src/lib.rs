@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::Path;
-use time::{OffsetDateTime, Time, UtcDateTime};
+use time::OffsetDateTime;
 
 use std::env;
 use std::fs::{self, File};
@@ -82,7 +82,7 @@ fn process_wheel_with_env_vars(
 }
 
 #[pymodule]
-fn _wheel_metadata_injector<'py>(_py: Python, m: &Bound<'py, PyModule>) -> PyResult<()> {
+fn _wheel_metadata_injector(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<WheelInfo>()?;
     m.add_function(wrap_pyfunction!(process_wheel, m)?)?;
     m.add_function(wrap_pyfunction!(process_wheel_with_env_file, m)?)?;
@@ -190,12 +190,10 @@ pub fn get_repository_info() -> Option<RepositoryInfo> {
     let mut remote_url = None;
     // TODO: Handle multiple remotes, maybe just use the first one
     // or the one that matches a specific pattern, or list them all
-    for remote in remotes.iter() {
-        if let Some(remote) = remote {
-            match repo.find_remote(remote) {
-                Ok(remote) => remote_url = remote.url().map(|s| s.to_string()),
-                Err(_) => return None,
-            }
+    for remote in remotes.iter().flatten() {
+        match repo.find_remote(remote) {
+            Ok(remote) => remote_url = remote.url().map(|s| s.to_string()),
+            Err(_) => return None,
         }
     }
 
