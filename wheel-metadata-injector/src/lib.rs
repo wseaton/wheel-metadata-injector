@@ -197,7 +197,7 @@ pub fn get_repository_info() -> Option<RepositoryInfo> {
         Ok(repo) => repo,
         Err(_) => {
             println!(
-                "wheel-metadata-injector couldn not find git repo, is this an isolated build?"
+                "WARNING: wheel-metadata-injector could not find git repo, is this an isolated build?"
             );
             return None;
         }
