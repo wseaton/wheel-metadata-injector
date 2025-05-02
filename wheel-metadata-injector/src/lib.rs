@@ -39,6 +39,7 @@ pub const ENV_WHITELIST: &[&str] = &[
     "RUNNER_OS",
     "RUNNER_ARCH",
     // Build system info
+    "CMAKE_BUILD_TYPE",
     "PYTHON_VERSION",
     "SETUPTOOLS_VERSION",
     "PIP_VERSION",
