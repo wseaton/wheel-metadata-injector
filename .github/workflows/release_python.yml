@@ -31,7 +31,7 @@ jobs:
     - name: Install dependencies for libgit2
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgit2-dev openssl-dev pkg-config
+        sudo apt-get install -y libgit2-dev libssl-dev pkg-config
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
@@ -40,6 +40,7 @@ jobs:
         manylinux: auto
         args: --release --out dist -m Cargo.toml
         working-directory: wheel-metadata-injector
+    
     - name: Install built wheel
       if: matrix.target == 'x86_64'
       run: |
