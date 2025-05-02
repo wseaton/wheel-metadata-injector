@@ -11,7 +11,11 @@ on:
       - 'wheel-metadata-injector/**'
 
 jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
+
   test:
+    needs: pre-commit
     defaults:
         run:
           working-directory: wheel-metadata-injector
