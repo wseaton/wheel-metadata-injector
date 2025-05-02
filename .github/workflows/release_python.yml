@@ -5,11 +5,11 @@ on:
   pull_request:
 
 jobs:
-  pre-commit:
-    uses: ./.github/workflows/pre-commit.yml
+  tests:
+    uses: ./.github/workflows/tests.yml
 
   linux:
-    needs: pre-commit
+    needs: tests
     defaults:
       run:
         working-directory: wheel-metadata-injector
