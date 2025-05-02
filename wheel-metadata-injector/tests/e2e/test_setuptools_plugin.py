@@ -28,7 +28,7 @@ def test_setuptools_plugin(temp_dir):
 
     os.environ["TEST_ENV_VAR"] = "test_value"
 
-    result = subprocess.run(
+    _result = subprocess.run(
         [sys.executable, "setup.py", "bdist_wheel", "--env-vars", "TEST_ENV_VAR"],
         cwd=temp_dir,
         check=True,
@@ -83,7 +83,7 @@ def test_setuptools_plugin_with_env_file(temp_dir):
     with open(env_file, "w") as f:
         f.write("TEST_ENV_VAR\nANOTHER_TEST_VAR")
 
-    result = subprocess.run(
+    _result = subprocess.run(
         [sys.executable, "setup.py", "bdist_wheel", "--env-file", str(env_file)],
         cwd=temp_dir,
         check=True,
