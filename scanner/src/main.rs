@@ -173,7 +173,7 @@ async fn extract_from_cloud(uri: &str, all_metadata: bool) -> Result<()> {
                     .with_context(|| "Failed to read METADATA")?;
 
             tracing::info!("=== Package Metadata ===");
-           println!("{}", pkg_metadata_content);
+            println!("{}", pkg_metadata_content);
         } else {
             tracing::info!("\nNo package METADATA file found in wheel!");
         }

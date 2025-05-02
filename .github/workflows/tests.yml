@@ -10,8 +10,17 @@ on:
     paths:
       - 'wheel-metadata-injector/**'
 
+# Cancel in-progress jobs on same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
+
   test:
+    needs: pre-commit
     defaults:
         run:
           working-directory: wheel-metadata-injector

@@ -51,7 +51,7 @@ fn test_scanner_with_example_wheel() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|entry| {
             let path = entry.path();
             path.is_file()
-                && path.extension().map_or(false, |ext| ext == "whl")
+                && path.extension().is_some_and(|ext| ext == "whl")
                 && path
                     .file_name()
                     .unwrap()

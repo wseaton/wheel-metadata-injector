@@ -165,7 +165,6 @@ pub fn internal_process_wheel(
 }
 
 pub fn get_pipeline_info() -> Option<AutomationInfo> {
-    
     // Check if running in GitHub Actions
     if env::var("GITHUB_ACTIONS").is_ok() {
         let run_id = env::var("GITHUB_RUN_ID").ok();
@@ -184,9 +183,6 @@ pub fn get_pipeline_info() -> Option<AutomationInfo> {
             }),
         });
     }
-
-
-
 
     None
 }
@@ -371,7 +367,6 @@ pub struct AutomationInfo {
     /// Information specific to github actions.
     #[serde(flatten)]
     actions_info: Option<ActionsInfo>,
-
 }
 
 #[derive(Debug, Serialize, Deserialize)]

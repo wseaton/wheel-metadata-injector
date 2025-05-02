@@ -2,10 +2,21 @@ name: Python
 
 on:
   push:
+    branches: [ main ]
+    tags: [ 'v*' ]  # Run on version tags for releases
   pull_request:
 
+# Cancel in-progress jobs on same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   linux:
+    needs: tests
     defaults:
       run:
         working-directory: wheel-metadata-injector
