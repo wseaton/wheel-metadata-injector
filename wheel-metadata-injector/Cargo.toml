@@ -14,3 +14,9 @@ sha2 = "0.10.8"
 tempfile = "3.19.1"
 zip = "2.6.1"
 pyo3 = { version = "0.24.2", features = ["extension-module", "abi3", "abi3-py38"] }
+serde = { version = "1.0.219", features = ["derive"] }
+toml = { version = "0.8.22", features = ["indexmap"] }
+anyhow = "1.0.98"
+time = { version = "0.3.41", features = ["formatting", "serde"] }
+git2 = "0.20.1"
+indexmap = { version = "2.9.0", features = ["serde"] }

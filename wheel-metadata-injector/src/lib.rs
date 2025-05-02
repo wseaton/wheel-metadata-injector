@@ -1,7 +1,10 @@
+use indexmap::IndexMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::Path;
+use time::{OffsetDateTime, Time, UtcDateTime};
 
 use std::env;
 use std::fs::{self, File};
@@ -36,7 +39,7 @@ pub const ENV_WHITELIST: &[&str] = &[
     "PYTHON_VERSION",
     "SETUPTOOLS_VERSION",
     "PIP_VERSION",
-    "CC", 
+    "CC",
     "CXX",
     "CFLAGS",
     "CXXFLAGS",
@@ -134,11 +137,11 @@ fn get_whitelisted_env_vars_with_file(env_file: String) -> PyResult<Vec<(String,
     Ok(collect_whitelisted_env_vars_with_file(Some(&env_file)))
 }
 
-fn internal_process_wheel(
+pub fn internal_process_wheel(
     wheel_path: &str,
     output_path: &str,
     env_vars: &[(String, String)],
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let temp_dir_path = temp_dir.path();
 
@@ -146,11 +149,70 @@ fn internal_process_wheel(
     let build_env_path = temp_dir_path
         .join(&wheel_info.dist_info_dir)
         .join(BUILD_ENV_FILENAME);
-    create_build_env_file(&build_env_path, env_vars)?;
+
+    let git = get_repository_info();
+    let automation = get_pipeline_info();
+
+    create_build_env_file(&build_env_path, env_vars, git, automation)?;
     update_record_file(temp_dir_path, &wheel_info, &build_env_path)?;
     repack_wheel(temp_dir_path, output_path)?;
 
     Ok(())
+}
+
+pub fn get_pipeline_info() -> Option<AutomationInfo> {
+    // Get pipeline information from environment variables common in CI/CD systems
+    // For example, GitHub Actions and GitLab CI/CD
+    let run_id = env::var("GITHUB_RUN_ID")
+        .ok()
+        .or_else(|| env::var("GITLAB_CI_PIPELINE_ID").ok())
+        .or_else(|| env::var("CI_PIPELINE_ID").ok());
+    if let Some(run_id) = run_id {
+        return Some(AutomationInfo {
+            run_id: Some(run_id),
+        });
+    }
+
+    None
+}
+
+pub fn get_repository_info() -> Option<RepositoryInfo> {
+    // Get git information from the current directory using libgit2
+    let repo = match git2::Repository::discover(".") {
+        Ok(repo) => repo,
+        Err(_) => return None,
+    };
+
+    let remotes = match repo.remotes() {
+        Ok(remotes) => remotes,
+        Err(_) => return None,
+    };
+    let mut remote_url = None;
+    // TODO: Handle multiple remotes, maybe just use the first one
+    // or the one that matches a specific pattern, or list them all
+    for remote in remotes.iter() {
+        if let Some(remote) = remote {
+            match repo.find_remote(remote) {
+                Ok(remote) => remote_url = remote.url().map(|s| s.to_string()),
+                Err(_) => return None,
+            }
+        }
+    }
+
+    let commit = match repo.head() {
+        Ok(head) => head.peel_to_commit().ok(),
+        Err(_) => None,
+    };
+
+    let commit = match commit {
+        Some(commit) => commit.id().to_string(),
+        None => return None,
+    };
+
+    Some(RepositoryInfo {
+        url: remote_url,
+        commit,
+    })
 }
 
 pub fn read_vars_list_from_file(file_path: &str) -> io::Result<Vec<String>> {
@@ -223,7 +285,6 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
         let file = archive.by_index(i)?;
         let file_path = file.name();
 
-        
         if let Some(idx) = file_path.find(".dist-info/") {
             let dir_name = &file_path[..idx + 10]; // +10 to include ".dist-info"
             dist_info_dir = Some(dir_name.to_string());
@@ -241,7 +302,6 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
         }
     };
 
-    
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let file_path = file.name();
@@ -267,10 +327,40 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
     })
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BuildEnvMetadata {
+    #[serde(serialize_with = "time::serde::iso8601::serialize")]
+    build_time: OffsetDateTime,
+    git: Option<RepositoryInfo>,
+    #[serde(rename = "env")]
+    env_vars: IndexMap<String, String>,
+    automation: Option<AutomationInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RepositoryInfo {
+    /// The git remote URL of the repository.
+    #[serde(rename = "url")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+    /// The commit hash of the repository at the time of wheel creation.
+    #[serde(rename = "commit")]
+    commit: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AutomationInfo {
+    /// The continuous integration job identifier (e.g., GitHub Actions job name)
+    /// used to produce the wheel.
+    run_id: Option<String>,
+}
+
 pub fn create_build_env_file(
     build_env_path: &Path,
     env_vars: &[(String, String)],
-) -> io::Result<()> {
+    git: Option<RepositoryInfo>,
+    automation: Option<AutomationInfo>,
+) -> anyhow::Result<()> {
     let mut content = String::new();
 
     content.push_str("# Build environment variables captured during wheel creation\n");
@@ -278,9 +368,22 @@ pub fn create_build_env_file(
         "# This file adheres to PEP 658 and contains whitelisted environment variables\n\n",
     );
 
-    for (name, value) in env_vars {
-        content.push_str(&format!("{}={}\n", name, value));
-    }
+    let env_vars: IndexMap<String, String> = env_vars
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    let bem = BuildEnvMetadata {
+        env_vars,
+        build_time: OffsetDateTime::now_utc(),
+        git,
+        automation,
+    };
+
+    // Serialize the BuildEnvMetadata struct to TOML format
+    content.push_str(&toml::to_string(&bem)?);
+
+    println!("Content: {}", content);
 
     let mut file = File::create(build_env_path)?;
     file.write_all(content.as_bytes())?;

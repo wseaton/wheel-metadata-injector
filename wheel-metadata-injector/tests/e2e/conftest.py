@@ -38,7 +38,7 @@ def example_wheel(temp_dir):
     )
 
     dist_dir = temp_dir / "dist"
-    wheel_files = list(dist_dir.glob("*.whl"))
+    wheel_files = list(dist_dir.glob("example*.whl"))
     if not wheel_files:
         pytest.fail("Failed to build example wheel")
 

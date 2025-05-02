@@ -7,7 +7,7 @@ build:
     maturin develop
 
 test: build
-    uv run pytest -v tests/
+    uv run pytest -v -s tests/
 
 coverage: build
     uv run pytest --cov=wheel_metadata_injector --cov-report=term
@@ -33,4 +33,5 @@ example-wheel:
     cd examples && python setup.py bdist_wheel --skip-metadata-injection
 
 run-example: example-wheel
-    wheel-metadata-injector examples/dist/*.whl -o examples/dist/processed.whl
+    rm examples/dist/processed.whl || true
+    CUDA_HOME=/foo wheel-metadata-injector examples/dist/*.whl -o examples/dist/processed.whl

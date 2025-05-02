@@ -100,3 +100,5 @@ def test_cli_env_file(example_wheel, temp_dir):
         assert "test_value" in metadata_content
         assert "ANOTHER_TEST_VAR" in metadata_content
         assert "another_value" in metadata_content
+
+        print(metadata_content)
