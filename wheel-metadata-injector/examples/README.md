@@ -4,7 +4,15 @@ This directory contains an example of how to use the wheel-metadata-injector as 
 
 ## Using the Plugin
 
-1. First, install wheel-metadata-injector:
+1. Add `wheel-metadata-injector` to `build-system.requires`, for example, using `setuptools`:
+
+```toml
+[build-system]
+requires = ["setuptools", "wheel-metadata-injector"]
+build-backend = "setuptools.build_meta"
+```
+
+Alternatively, it can be manually installed:
 
 ```bash
 pip install wheel-metadata-injector
@@ -50,10 +58,10 @@ setup(
 
 ## Building a Wheel
 
-After setting up your setup.py, build your wheel as usual:
+After setting up your setup.py, build your wheel, e.g. using [`build`](https://pypi.org/project/build/)  (`pip install build`)
 
 ```bash
-python setup.py bdist_wheel
+python -m build
 ```
 
 The plugin will automatically inject the environment metadata into the wheel after it's built.
