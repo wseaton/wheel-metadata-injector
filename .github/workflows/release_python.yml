@@ -40,6 +40,8 @@ jobs:
         manylinux: auto
         args: --release --out dist -m Cargo.toml
         working-directory: wheel-metadata-injector
+        before-script-linux: |
+          yum install -y libgit2-devel openssl-devel
     
     - name: Install built wheel
       if: matrix.target == 'x86_64'
