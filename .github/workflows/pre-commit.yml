@@ -6,11 +6,6 @@ on:
   pull_request:
   workflow_call:
 
-# Use inherited concurrency from caller workflow chain
-# If called directly, use a consistent naming to avoid deadlock
-concurrency:
-  group: Python-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   pre-commit:

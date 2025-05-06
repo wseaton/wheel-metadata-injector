@@ -6,10 +6,6 @@ on:
     tags: [ 'v*' ]  # Run on version tags for releases
   pull_request:
 
-# Define concurrency for the entire workflow chain
-concurrency:
-  group: Python-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   tests:

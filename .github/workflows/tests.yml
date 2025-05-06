@@ -12,11 +12,6 @@ on:
     paths:
       - 'wheel-metadata-injector/**'
 
-# Use inherited concurrency from caller workflow
-# If called directly, use a consistent naming to avoid deadlock
-concurrency:
-  group: Python-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   pre-commit:
