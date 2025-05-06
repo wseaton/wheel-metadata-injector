@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use serde::{Deserialize, Serialize};
+
 use std::io;
 use std::path::Path;
 use time::OffsetDateTime;
@@ -15,6 +15,8 @@ use hex::encode;
 use sha2::{Digest, Sha256};
 use zip::write::FileOptions;
 use zip::{ZipArchive, ZipWriter};
+
+use common::*;
 
 pub const ENV_WHITELIST: &[&str] = &[
     // PyTorch/CUDA build info
@@ -339,53 +341,6 @@ pub fn unpack_wheel(wheel_path: &str, temp_dir: &Path) -> io::Result<WheelInfo> 
         dist_info_dir,
         metadata_path,
     })
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BuildEnvMetadata {
-    #[serde(serialize_with = "time::serde::iso8601::serialize")]
-    build_time: OffsetDateTime,
-    git: Option<RepositoryInfo>,
-    #[serde(rename = "env")]
-    env_vars: IndexMap<String, String>,
-    automation: Option<AutomationInfo>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RepositoryInfo {
-    /// The git remote URL of the repository.
-    #[serde(rename = "url")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
-    /// The commit hash of the repository at the time of wheel creation.
-    #[serde(rename = "commit")]
-    commit: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AutomationInfo {
-    /// Information specific to github actions.
-    #[serde(flatten)]
-    actions_info: Option<ActionsInfo>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ActionsInfo {
-    /// The GitHub Actions run ID.
-    #[serde(rename = "run_id")]
-    run_id: Option<String>,
-    /// The GitHub Actions workflow name.
-    #[serde(rename = "workflow_name")]
-    workflow_name: Option<String>,
-    /// The GitHub Actions workflow SHA.
-    #[serde(rename = "workflow_sha")]
-    workflow_sha: Option<String>,
-    /// The GitHub Actions job name.
-    #[serde(rename = "job_name")]
-    job_name: Option<String>,
-    /// Runner name.
-    #[serde(rename = "runner_name")]
-    runner_name: Option<String>,
 }
 
 pub fn create_build_env_file(

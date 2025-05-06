@@ -1,6 +1,6 @@
 [workspace]
 
-members = [ "scanner", 
+members = [ "common",  "scanner", 
     "wheel-metadata-injector"
 ]
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use clap::Parser;
+use clap::{ArgAction, Parser};
 
 use google_cloud_storage::client::{Client, ClientConfig};
 use google_cloud_storage::http::objects::download::Range;
@@ -27,9 +27,17 @@ struct Args {
     #[clap(value_parser)]
     wheel_path: String,
 
-    /// Extract all wheel metadata, not just the build environment
-    #[clap(short, long, default_value = "false")]
-    all_metadata: bool,
+    /// Environment variable to validate is in the build metadata, a key value pair
+    /// in the form of KEY=VALUE
+    #[clap(short, long, value_parser=parse_key_val, action = ArgAction::Append)]
+    env_var: Vec<(String, String)>,
+}
+
+fn parse_key_val(s: &str) -> Result<(String, String), String> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+    Ok((s[..pos].to_string(), s[pos + 1..].to_string()))
 }
 
 #[tokio::main]
@@ -43,13 +51,56 @@ async fn main() -> Result<()> {
         .init();
     let args = Args::parse();
 
-    if args.wheel_path.starts_with("gs://") {
-        extract_from_cloud(&args.wheel_path, args.all_metadata).await
-    } else if args.wheel_path.starts_with("http://") || args.wheel_path.starts_with("https://") {
-        extract_from_registry(&args.wheel_path, args.all_metadata).await
-    } else {
-        extract_from_local_file(&args.wheel_path, args.all_metadata).await
+    let metadata = match args.wheel_path.as_str() {
+        path if path.starts_with("gs://") => extract_from_cloud(&args.wheel_path).await,
+        path if path.starts_with("http://") || path.starts_with("https://") => {
+            extract_from_registry(&args.wheel_path).await
+        }
+        _ => extract_from_local_file(&args.wheel_path).await,
+    };
+
+    let metadata = metadata?;
+    let metadata: common::BuildEnvMetadata =
+        toml::from_str(&metadata).with_context(|| "Failed to parse metadata as TOML")?;
+
+    // check and make sure the env vars are in the metadata by checking the indexmap in BuildEnvMetadata
+    let mut num_missing = 0;
+
+    for (key, value) in args.env_var {
+        if let Some(env_value) = metadata.env_vars.get(&key) {
+            if env_value != &value {
+                tracing::warn!(
+                    "Environment variable {} does not match! Expected: {}, Found: {}",
+                    key,
+                    value,
+                    env_value
+                );
+                num_missing += 1;
+            } else {
+                tracing::info!("Environment variable {} matches!", key);
+            }
+        } else {
+            tracing::warn!("Environment variable {} not found in metadata!", key);
+            num_missing += 1;
+        }
     }
+
+    if num_missing > 0 {
+        tracing::error!(
+            "Found {} missing or mismatched environment variables!",
+            num_missing
+        );
+        return Err(anyhow::anyhow!(
+            "Found {} missing or mismatched environment variables!",
+            num_missing
+        ));
+    } else {
+        tracing::info!("All environment variables match!");
+    }
+    tracing::info!("Build environment metadata:");
+    println!("{:#?}", metadata);
+
+    Ok(())
 }
 
 /// Helper function to extract metadata from a ZIP archive
@@ -57,8 +108,7 @@ async fn main() -> Result<()> {
 async fn extract_metadata_from_archive<R: Read + Seek>(
     mut archive: ZipArchive<R>,
     _source_desc: &str,
-    all_metadata: bool,
-) -> Result<()> {
+) -> Result<String> {
     // Find the dist-info directory
     let dist_info_dir = zip_utils::find_dist_info_dir(&mut archive)
         .with_context(|| "Failed to find .dist-info directory in wheel")?;
@@ -82,40 +132,19 @@ async fn extract_metadata_from_archive<R: Read + Seek>(
 
         tracing::info!("=== Build Environment Metadata ===");
         println!("{}", metadata_content);
+
+        return Ok(metadata_content);
     } else {
         tracing::info!("No build environment metadata (WHEEL.metadata) found in wheel!");
+        return Err(anyhow::anyhow!(
+            "No build environment metadata (WHEEL.metadata) found in wheel!"
+        ));
     }
-
-    // Extract and output package metadata if requested
-    if all_metadata {
-        let pkg_metadata_path = format!("{}METADATA", dist_info_dir);
-
-        let has_pkg_metadata = archive
-            .by_name(&pkg_metadata_path)
-            .map(|file| {
-                tracing::info!("Found METADATA ({} bytes)", file.size());
-                true
-            })
-            .unwrap_or(false);
-
-        if has_pkg_metadata {
-            let pkg_metadata_content =
-                zip_utils::read_file_as_string(&mut archive, &pkg_metadata_path)
-                    .with_context(|| "Failed to read METADATA")?;
-
-            tracing::info!("=== Package Metadata ===");
-            println!("{}", pkg_metadata_content);
-        } else {
-            tracing::info!("\nNo package METADATA file found in wheel!");
-        }
-    }
-
-    Ok(())
 }
 
 /// Extract metadata from a local wheel file
 #[tracing::instrument(skip_all)]
-async fn extract_from_local_file(wheel_path: &str, all_metadata: bool) -> Result<()> {
+async fn extract_from_local_file(wheel_path: &str) -> Result<String> {
     tracing::info!("Reading local wheel file: {}", wheel_path);
 
     let file = std::fs::File::open(wheel_path)
@@ -124,16 +153,14 @@ async fn extract_from_local_file(wheel_path: &str, all_metadata: bool) -> Result
     let archive = ZipArchive::new(file)
         .with_context(|| format!("Failed to open ZIP archive: {}", wheel_path))?;
 
-    extract_metadata_from_archive(archive, "local file", all_metadata).await
+    extract_metadata_from_archive(archive, "local file").await
 }
 
 /// Do a ranged read from a pypy registry URL, this is downloading just the metadata
 /// part of the wheel using a standard HTTP request
 #[tracing::instrument(skip_all)]
-async fn extract_from_registry(uri: &str, all_metadata: bool) -> Result<()> {
+async fn extract_from_registry(uri: &str) -> Result<String> {
     tracing::info!("Fetching wheel from registry: {}", uri);
-
-    // Create a reqwest client and set up for ranged reads
     let client = reqwest::Client::new();
 
     // First, get the total size of the file with a HEAD request
@@ -147,17 +174,14 @@ async fn extract_from_registry(uri: &str, all_metadata: bool) -> Result<()> {
 
     tracing::info!("Wheel size: {} bytes", total_size);
 
-    // Create a custom ranged reader
     let http_reader = HttpRangedReader::new(client, uri.to_string(), total_size).await?;
-
-    // Create a ZIP archive from the ranged reader
     let archive = ZipArchive::new(http_reader).context("Failed to open ZIP archive from HTTP")?;
 
-    extract_metadata_from_archive(archive, "HTTP source", all_metadata).await
+    extract_metadata_from_archive(archive, "HTTP source").await
 }
 
 #[tracing::instrument(skip_all)]
-async fn extract_from_cloud(uri: &str, all_metadata: bool) -> Result<()> {
+async fn extract_from_cloud(uri: &str) -> Result<String> {
     let uri = uri
         .strip_prefix("gs://")
         .context("URI must start with gs://")?;
@@ -179,7 +203,7 @@ async fn extract_from_cloud(uri: &str, all_metadata: bool) -> Result<()> {
 
     let archive = ZipArchive::new(gcs_reader).context("Failed to open ZIP archive from GCS")?;
 
-    extract_metadata_from_archive(archive, "GCS source", all_metadata).await
+    extract_metadata_from_archive(archive, "GCS source").await
 }
 
 /// Trait for common functionality between different ranged readers
