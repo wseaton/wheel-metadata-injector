@@ -33,5 +33,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install pre-commit
     
+    - name: Install actionlint
+      run: |
+        bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        chmod +x actionlint
+        sudo mv actionlint /usr/local/bin/
+        actionlint --version
+
     - name: Run pre-commit
       run: pre-commit run --all-files
