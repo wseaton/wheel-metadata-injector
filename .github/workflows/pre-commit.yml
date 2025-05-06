@@ -6,9 +6,10 @@ on:
   pull_request:
   workflow_call:
 
-# Cancel in-progress jobs on same branch
+# Use inherited concurrency from caller workflow chain
+# If called directly, use a consistent naming to avoid deadlock
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: Python-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
