@@ -70,6 +70,7 @@ async fn main() -> Result<()> {
         toml::from_str(&metadata).with_context(|| "Failed to parse metadata as TOML")?;
 
     if let Some(cel_expr) = args.cel_expr {
+        tracing::debug!("Evaluating CEL expression: {}", cel_expr);
         let program = Program::compile(&cel_expr.clone())
             .with_context(|| format!("Failed to compile CEL expression: {}", cel_expr))?;
         let mut context = CELContext::default();

@@ -29,11 +29,13 @@ cargo install --locked --path .
 
 #### Using CEL
 
-`wheel-metadata-scanner` supports CEL expressions that allow you to craft complex validations:
+`wheel-metadata-scanner` supports CEL expressions that allow you to craft arbitrarily complex validations:
 
 ```bash
+YESTERDAY=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+
 wheel-metadata-scanner 'https://storage.googleapis.com/neuralmagic-public-pypi/dist/xformers-0.0.30+4cf69f09.d20250505-cp312-cp312-linux_x86_64.whl' \
-  -c 'metadata.env["CUDA_VERSION"] == "12.8" && metadata.env["TORCH_CUDA_ARCH_LIST"].contains("10.0;12.0")'
+  -c 'metadata.env["CUDA_VERSION"] == "12.8" && metadata.env["TORCH_CUDA_ARCH_LIST"].contains("10.0;12.0") && (timestamp(metadata.build_time) - timestamp("'$YESTERDAY'") < duration("24h"))'
 ```
 
 #### Using ENV VARs 
