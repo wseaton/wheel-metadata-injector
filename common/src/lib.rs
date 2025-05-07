@@ -1,16 +1,51 @@
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BuildEnvMetadata {
-    #[serde(serialize_with = "time::serde::iso8601::serialize")]
-    #[serde(deserialize_with = "time::serde::iso8601::deserialize")]
-    pub build_time: OffsetDateTime,
+    #[serde(with = "chrono_format")]
+    pub build_time: DateTime<Utc>,
     pub git: Option<RepositoryInfo>,
     #[serde(rename = "env")]
     pub env_vars: IndexMap<String, String>,
     pub automation: Option<AutomationInfo>,
+}
+
+mod chrono_format {
+    use chrono::{DateTime, ParseError, Utc};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let rfc3339 = DateTime::to_rfc3339(date);
+        rfc3339
+            .serialize(serializer)
+            .map_err(serde::ser::Error::custom)
+    }
+
+    // Custom parser that can handle the +00 year prefix in timestamps
+    fn parse_datetime(s: &str) -> Result<DateTime<Utc>, ParseError> {
+        // Handle the case where the year has a +00 prefix (e.g., +002025)
+        if let Some(stripped) = s.strip_prefix("+00") {
+            return DateTime::parse_from_rfc3339(stripped).map(|dt| dt.with_timezone(&Utc));
+        }
+
+        // Try regular RFC3339 parsing
+        DateTime::parse_from_rfc3339(s).map(|dt| dt.with_timezone(&Utc))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        parse_datetime(&s).map_err(|e| {
+            serde::de::Error::custom(format!("Failed to parse datetime '{}': {}", s, e))
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

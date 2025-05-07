@@ -1,10 +1,10 @@
+use chrono::Utc;
 use indexmap::IndexMap;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use std::io;
 use std::path::Path;
-use time::OffsetDateTime;
 
 use std::env;
 use std::fs::{self, File};
@@ -363,7 +363,7 @@ pub fn create_build_env_file(
 
     let bem = BuildEnvMetadata {
         env_vars,
-        build_time: OffsetDateTime::now_utc(),
+        build_time: Utc::now(),
         git,
         automation,
     };

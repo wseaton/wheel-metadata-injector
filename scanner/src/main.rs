@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use anyhow::{Context, Result};
 use bytes::Bytes;
+
+use cel_interpreter::{Context as CELContext, Program};
 use clap::{ArgAction, Parser};
 
 use google_cloud_storage::client::{Client, ClientConfig};
@@ -31,6 +33,10 @@ struct Args {
     /// in the form of KEY=VALUE
     #[clap(short, long, value_parser=parse_key_val, action = ArgAction::Append)]
     env_var: Vec<(String, String)>,
+
+    /// CEL expression to validate is in the build metadata
+    #[clap(short, long, value_parser)]
+    cel_expr: Option<String>,
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -63,9 +69,30 @@ async fn main() -> Result<()> {
     let metadata: common::BuildEnvMetadata =
         toml::from_str(&metadata).with_context(|| "Failed to parse metadata as TOML")?;
 
-    // check and make sure the env vars are in the metadata by checking the indexmap in BuildEnvMetadata
-    let mut num_missing = 0;
+    if let Some(cel_expr) = args.cel_expr {
+        let program = Program::compile(&cel_expr.clone())
+            .with_context(|| format!("Failed to compile CEL expression: {}", cel_expr))?;
+        let mut context = CELContext::default();
 
+        // Add metadata variable to the context
+        context.add_variable("metadata", &metadata)?;
+
+        // Execute the CEL expression with our enhanced context
+        let result = program
+            .execute(&context)
+            .with_context(|| format!("Failed to evaluate CEL expression: {}", cel_expr))?;
+
+        if result == true.into() {
+            tracing::info!("CEL expression evaluated to true!");
+        } else {
+            tracing::error!("CEL expression evaluated to false!");
+            return Err(anyhow::anyhow!("CEL expression evaluated to false!"));
+        }
+    } else {
+        tracing::info!("No CEL expression provided, skipping evaluation.");
+    }
+
+    let mut num_missing = 0;
     for (key, value) in args.env_var {
         if let Some(env_value) = metadata.env_vars.get(&key) {
             if env_value != &value {
@@ -97,8 +124,7 @@ async fn main() -> Result<()> {
     } else {
         tracing::info!("All environment variables match!");
     }
-    tracing::info!("Build environment metadata:");
-    println!("{:#?}", metadata);
+    tracing::debug!("Build environment metadata: {:#?}", metadata);
 
     Ok(())
 }

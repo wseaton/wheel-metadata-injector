@@ -10,9 +10,10 @@ A simple utility to validate metadata from Python wheel packages, with special f
   - Implements a custom ranged reader for Google Cloud Storage that performs ranged HTTP requests
   - Minimizes network traffic by only fetching the content needed
 
-## TODO
+## TODOs
 
 - Add more validation logic based on the injected metadata format. Currently only environment variable checking is supported. Potentially a DSL or simple query/expression language would be handy?
+- Support validations against other standard files in the wheel, which use the RFC882 email header format
 
 ## Usage
 
@@ -25,6 +26,17 @@ cargo install --locked --path .
 ```
 
 ### Validating a Wheel in a Remote Registry
+
+#### Using CEL
+
+`wheel-metadata-scanner` supports CEL expressions that allow you to craft complex validations:
+
+```bash
+wheel-metadata-scanner 'https://storage.googleapis.com/neuralmagic-public-pypi/dist/xformers-0.0.30+4cf69f09.d20250505-cp312-cp312-linux_x86_64.whl' \
+  -c 'metadata.env["CUDA_VERSION"] == "12.8" && metadata.env["TORCH_CUDA_ARCH_LIST"].contains("10.0;12.0")'
+```
+
+#### Using ENV VARs 
 
 ```bash
 # Extract only the build environment metadata
