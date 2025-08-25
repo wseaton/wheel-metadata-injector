@@ -37,6 +37,10 @@ struct Args {
     /// CEL expression to validate is in the build metadata
     #[clap(short, long, value_parser)]
     cel_expr: Option<String>,
+
+    /// Extract and print the version of a specific dependency from wheel METADATA
+    #[clap(short, long, value_parser)]
+    dependency: Option<String>,
 }
 
 fn parse_key_val(s: &str) -> Result<(String, String), String> {
@@ -56,6 +60,29 @@ async fn main() -> Result<()> {
         )
         .init();
     let args = Args::parse();
+
+    // handle dependency extraction first as it doesn't need WHEEL.metadata
+    if let Some(dependency_name) = &args.dependency {
+        let dependency_version =
+            extract_dependency_from_wheel(&args.wheel_path, dependency_name).await?;
+
+        match dependency_version {
+            Some(version) => {
+                println!("{}", version);
+                return Ok(());
+            }
+            None => {
+                tracing::error!(
+                    "Dependency '{}' not found in wheel metadata",
+                    dependency_name
+                );
+                return Err(anyhow::anyhow!(
+                    "Dependency '{}' not found in wheel metadata",
+                    dependency_name
+                ));
+            }
+        }
+    }
 
     let metadata = match args.wheel_path.as_str() {
         path if path.starts_with("gs://") => extract_from_cloud(&args.wheel_path).await,
@@ -231,6 +258,108 @@ async fn extract_from_cloud(uri: &str) -> Result<String> {
     let archive = ZipArchive::new(gcs_reader).context("Failed to open ZIP archive from GCS")?;
 
     extract_metadata_from_archive(archive, "GCS source").await
+}
+
+/// Extract dependency version from any wheel source (local, HTTP, or GCS)
+#[tracing::instrument(skip_all)]
+async fn extract_dependency_from_wheel(
+    wheel_path: &str,
+    dependency_name: &str,
+) -> Result<Option<String>> {
+    match wheel_path {
+        path if path.starts_with("gs://") => {
+            extract_dependency_from_cloud(path, dependency_name).await
+        }
+        path if path.starts_with("http://") || path.starts_with("https://") => {
+            extract_dependency_from_registry(path, dependency_name).await
+        }
+        _ => extract_dependency_from_local_file(wheel_path, dependency_name).await,
+    }
+}
+
+/// Extract dependency version from a local wheel file
+#[tracing::instrument(skip_all)]
+async fn extract_dependency_from_local_file(
+    wheel_path: &str,
+    dependency_name: &str,
+) -> Result<Option<String>> {
+    tracing::info!("Reading local wheel file for dependency: {}", wheel_path);
+
+    let file = std::fs::File::open(wheel_path)
+        .with_context(|| format!("Failed to open wheel file: {}", wheel_path))?;
+
+    let mut archive = ZipArchive::new(file)
+        .with_context(|| format!("Failed to open ZIP archive: {}", wheel_path))?;
+
+    extract_dependency_from_archive(&mut archive, dependency_name).await
+}
+
+/// Extract dependency version from a registry URL
+#[tracing::instrument(skip_all)]
+async fn extract_dependency_from_registry(
+    uri: &str,
+    dependency_name: &str,
+) -> Result<Option<String>> {
+    tracing::info!("Fetching wheel from registry for dependency: {}", uri);
+    let client = reqwest::Client::new();
+
+    let head_response = client.head(uri).send().await?;
+    let total_size = head_response
+        .headers()
+        .get("content-length")
+        .and_then(|len| len.to_str().ok())
+        .and_then(|len| len.parse::<u64>().ok())
+        .with_context(|| "Failed to determine file size from HTTP headers")?;
+
+    tracing::info!("Wheel size: {} bytes", total_size);
+
+    let http_reader = HttpRangedReader::new(client, uri.to_string(), total_size).await?;
+    let mut archive =
+        ZipArchive::new(http_reader).context("Failed to open ZIP archive from HTTP")?;
+
+    extract_dependency_from_archive(&mut archive, dependency_name).await
+}
+
+/// Extract dependency version from cloud storage
+#[tracing::instrument(skip_all)]
+async fn extract_dependency_from_cloud(uri: &str, dependency_name: &str) -> Result<Option<String>> {
+    let uri = uri
+        .strip_prefix("gs://")
+        .context("URI must start with gs://")?;
+    let parts: Vec<&str> = uri.splitn(2, '/').collect();
+    if parts.len() != 2 {
+        anyhow::bail!("Invalid GCS URI format. Expected gs://bucket/path/to/object");
+    }
+
+    let bucket = parts[0];
+    let object_path = parts[1];
+
+    tracing::info!("Connecting to GCS bucket for dependency: {}", bucket);
+
+    let config = ClientConfig::default().with_auth().await?;
+    let client = Client::new(config);
+
+    let gcs_reader =
+        GcsRangedReader::new(client, bucket.to_string(), object_path.to_string()).await?;
+    let mut archive = ZipArchive::new(gcs_reader).context("Failed to open ZIP archive from GCS")?;
+
+    extract_dependency_from_archive(&mut archive, dependency_name).await
+}
+
+/// Helper function to extract dependency version from a ZIP archive
+#[tracing::instrument(skip_all)]
+async fn extract_dependency_from_archive<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    dependency_name: &str,
+) -> Result<Option<String>> {
+    // Find the dist-info directory
+    let dist_info_dir = zip_utils::find_dist_info_dir(archive)
+        .with_context(|| "Failed to find .dist-info directory in wheel")?;
+
+    tracing::info!("Found dist-info directory: {}", dist_info_dir);
+
+    // Extract dependency version from METADATA file
+    zip_utils::extract_dependency_version(archive, &dist_info_dir, dependency_name)
 }
 
 /// Trait for common functionality between different ranged readers
@@ -449,7 +578,7 @@ impl RangedReader for GcsRangedReader {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
 
             rt.block_on(async move {
                 let req = GetObjectRequest {
@@ -464,7 +593,7 @@ impl RangedReader for GcsRangedReader {
                     .download_object(&req, &range)
                     .await
                     .map(Bytes::from)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    .map_err(|e| std::io::Error::other(e.to_string()))
             })
         })
     }
@@ -603,7 +732,7 @@ impl RangedReader for HttpRangedReader {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
 
             rt.block_on(async move {
                 let range_header = format!("bytes={}-{}", start, end - 1);
@@ -617,19 +746,19 @@ impl RangedReader for HttpRangedReader {
                     .headers(headers)
                     .send()
                     .await
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
 
                 if !response.status().is_success() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("HTTP request failed: {}", response.status()),
-                    ));
+                    return Err(std::io::Error::other(format!(
+                        "HTTP request failed: {}",
+                        response.status()
+                    )));
                 }
 
                 response
                     .bytes()
                     .await
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    .map_err(|e| std::io::Error::other(e.to_string()))
             })
         })
     }
